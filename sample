@@ -1,0 +1,122 @@
+import os
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+download_dir = '/Users/diaomengyu/Desktop'
+
+if not os.path.exists(download_dir):
+    os.makedirs(download_dir)
+    print(f"Created directory: {download_dir}", flush=True)
+
+
+def scraper(school, times, timet):
+    print(f"Starting scraper for {school} from {times} to {timet}", flush=True)
+
+    url = 'https://kns.cnki.net/kns/AdvSearch?dbcode=SCDB'
+    print(f"Opening URL: {url}", flush=True)
+
+    chrome_driver_path = '/Users/diaomengyu/Desktop/chromedriver-mac-x64/chromedriver'
+    service = Service(executable_path=chrome_driver_path)
+
+    chrome_options = Options()
+    chrome_options.add_argument("--ignore-certificate-errors")
+
+    driver = webdriver.Chrome(service=service, options=chrome_options)
+
+    driver.get(url)
+    print(f"Accessed {url}", flush=True)
+
+    try:
+        # 找到 <span value="SU">Subject</span>
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.XPATH, "//span[@value='SU']"))
+        )
+
+        # 点击 <span> 展开
+        subject_span = driver.find_element(By.XPATH, "//span[@value='SU']")
+        subject_span.click()
+        print("Clicked on Subject span to open dropdown", flush=True)
+
+        # 等待并选择 li data-val="AF">Author Affiliation</li
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.XPATH, "//li[@data-val='AF']"))
+        )
+        author_affiliation_option = driver.find_element(By.XPATH, "//li[@data-val='AF']")
+        author_affiliation_option.click()
+        print("Changed to Author Affiliation", flush=True)
+
+    except Exception as e:
+        print(f"Error while changing search category: {e}", flush=True)
+        driver.save_screenshot("error_screenshot.png")
+        driver.quit()
+        return
+
+    from selenium.webdriver.common.keys import Keys
+
+    try:
+        # 使用 data-tipid 定位输入框
+        WebDriverWait(driver, 15).until(
+            EC.presence_of_element_located((By.XPATH, "//input[@data-tipid='gradetxt-1']"))
+        )
+
+        # 输入框，输入学校名称
+        school_input = driver.find_element(By.XPATH, "//input[@data-tipid='gradetxt-1']")
+        school_input.send_keys(school)
+        print(f"Searched for school: {school}", flush=True)
+
+        # 回车键搜索
+        school_input.send_keys(Keys.RETURN)
+        print("Triggered search with Enter key", flush=True)
+
+    except Exception as e:
+        print(f"Error while searching for school: {e}", flush=True)
+        driver.save_screenshot("error_screenshot.png")
+        driver.quit()
+        return
+
+    try:
+        # 日期
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.XPATH, "//input[@id='datebox0']"))
+        )
+
+        # 设置时间范围
+        date_from = driver.find_element(By.XPATH, "//input[@id='datebox0']")
+        date_to = driver.find_element(By.XPATH, "//input[@id='datebox1']")
+        date_from.send_keys(times)
+        date_to.send_keys(timet)
+        print(f"Set time span from {times} to {timet}", flush=True)
+
+    except Exception as e:
+        print(f"Error while setting time range: {e}", flush=True)
+        driver.quit()
+        return
+
+    try:
+        WebDriverWait(driver, 30).until(
+            EC.element_to_be_clickable((By.XPATH, "//*[@id='input-box']/input[2]"))
+        )
+        search_button = driver.find_element(By.XPATH, "//*[@id='input-box']/input[2]")
+        search_button.click()
+        print("Search button clicked.", flush=True)
+
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.ID, "iframeResult"))
+        )
+        print("Search results loaded.", flush=True)
+
+    except Exception as e:
+        print(f"Error while clicking search button or loading results: {e}", flush=True)
+        driver.quit()
+        return
+
+    driver.quit()
+    print("Scraping completed and browser closed.", flush=True)
+
+
+# 示例
+scraper("武汉大学", "2004-01-01", "2004-12-31")
